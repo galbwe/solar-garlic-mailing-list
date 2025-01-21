@@ -2,60 +2,24 @@ package main
 
 import (
 	"net/http"
+	"solar-garlic-mailing-list/handlers"
 )
 
 func main() {
 	email := http.NewServeMux()
-	email.Handle("/subscribe", &subscribeHandler{})
-	email.Handle("/verify", &verifyHandler{})
-	email.Handle("/unsubscribe", &unsubscribeHandler{})
+	email.Handle("/subscribe", &handlers.Subscribe{})
+	email.Handle("/verify", &handlers.Verify{})
+	email.Handle("/unsubscribe", &handlers.Unsubscribe{})
 
 	admin := http.NewServeMux()
-	admin.Handle("/send", &adminSendHandler{})
-	admin.Handle("/schedule", &adminScheduleHandler{})
+	admin.Handle("/send", &handlers.Send{})
+	admin.Handle("/schedule", &handlers.Schedule{})
 
 	// root muxer
 	mux := http.NewServeMux()
-	mux.Handle("/", &healthcheckHandler{})
-	mux.Handle("/healthcheck", &healthcheckHandler{})
 	mux.Handle("/email/", http.StripPrefix("/email", email))
 	mux.Handle("/admin/", http.StripPrefix("/admin", admin))
+	mux.Handle("/healthcheck", &handlers.Healthcheck{})
 
 	http.ListenAndServe(":8080", mux)
-}
-
-type healthcheckHandler struct{}
-
-func (h *healthcheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("healthy!"))
-}
-
-type  subscribeHandler struct{}
-
-func (h *subscribeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Handling Email Registration ...\n"))
-}
-
-type verifyHandler struct{}
-
-func (h *verifyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Handling Email Verification ...\n"))
-}
-
-type adminSendHandler struct{}
-
-func (h *adminSendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Sending Message ...\n"))
-}
-
-type adminScheduleHandler struct{}
-
-func (h *adminScheduleHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Scheduling Message For Later ...\n"))
-}
-
-type  unsubscribeHandler struct{}
-
-func (h *unsubscribeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Unsubscribing ...\n"))
 }
