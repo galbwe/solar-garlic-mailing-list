@@ -1,0 +1,6 @@
+services:
+  mail:
+    image: sj26/mailcatcher:v0.10.0
+    ports:
+      - 1080:1080
+      - 1025:1025
