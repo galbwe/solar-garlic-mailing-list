@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-playground/validator/v10"
 )
 
 var db *sql.DB
@@ -29,10 +30,12 @@ func main() {
 
 	r.Use(middleware.Logger)
 
+	var validate = validator.New(validator.WithRequiredStructEnabled())
+
 	// v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/emails", handlers.ListEmailsHandler(db))
-		r.Post("/emails", handlers.CreateEmailHandler(db))
+		r.Get("/emails", handlers.ListEmailsHandler(db, validate))
+		r.Post("/emails", handlers.CreateEmailHandler(db, validate))
 
 		r.Get("/emails/{id:^[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
 			id := chi.URLParam(r, "id")

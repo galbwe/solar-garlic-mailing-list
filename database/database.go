@@ -46,8 +46,10 @@ func CreateEmail(db *sql.DB, email string) (*model.Email, error) {
 		INSERT INTO emails (email) VALUES ($1)
 		RETURNING id, email, date_created, date_verified, subscribed
 	`
-	slog.Info("Inserting email into database", "stmt", stmt)
-	err := db.QueryRow(stmt, email).Scan(
+	params := []any{email}
+
+	slog.Info("Inserting email into database", "stmt", stmt, "params", params)
+	err := db.QueryRow(stmt, params...).Scan(
 		&createdEmail.ID,
 		&createdEmail.Email,
 		&createdEmail.DateCreated,
@@ -56,35 +58,26 @@ func CreateEmail(db *sql.DB, email string) (*model.Email, error) {
 	)
 
 	if err != nil {
-		slog.Error("Error inserting email into database", "stmt", stmt)
+		slog.Error("Error inserting email into database", "stmt", stmt, "params", params)
 		return nil, err
 	}
 
 	return createdEmail, nil
 }
 
-func ListEmails(db *sql.DB) ([]model.Email, error) {
+func ListEmails(db *sql.DB, email string) ([]model.Email, error) {
 	var emails []model.Email
 
-	stmt := `
-		SELECT  
-			id,
-			email,
-			date_created,
-			date_verified,
-			subscribed	
-		FROM emails;	
-	`
-	slog.Info("Selecting emails from database", "stmt", stmt)
+	stmt, params := getListEmailsQuery(email)
 
-	rows, err := db.Query(stmt)
+	slog.Info("Selecting emails from database", "stmt", stmt, "params", params)
+
+	rows, err := db.Query(stmt, params...)
 	if err != nil {
-		slog.Error("Error selecting email list from database", "stmt", stmt)
+		slog.Error("Error selecting email list from database", "stmt", stmt, "params", params)
 		return nil, err
 	}
 	defer rows.Close()
-
-	// iterate over rows using rows.Next()
 
 	for rows.Next() {
 		var email model.Email
@@ -98,7 +91,7 @@ func ListEmails(db *sql.DB) ([]model.Email, error) {
 		)
 
 		if scanErr != nil {
-			slog.Error("Error scanning sql rows", "stmt", stmt, "err", scanErr)
+			slog.Error("Error scanning sql rows", "stmt", stmt, "params", params, "err", scanErr)
 			return nil, err
 		}
 
@@ -106,4 +99,33 @@ func ListEmails(db *sql.DB) ([]model.Email, error) {
 	}
 
 	return emails, nil
+}
+
+func getListEmailsQuery(email string) (string, []any) {
+	if email == "" {
+		stmt := `
+			SELECT  
+				id,
+				email,
+				date_created,
+				date_verified,
+				subscribed	
+			FROM emails;	
+		`
+		params := []any{}
+		return stmt, params
+	}
+
+	stmt := `
+		SELECT	
+			id,
+			email,
+			date_created,
+			date_verified,
+			subscribed
+		FROM emails
+		where email = $1;
+	`
+	params := []any{email}
+	return stmt, params
 }

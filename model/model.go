@@ -14,9 +14,13 @@ type Email struct {
 }
 
 type CreateEmailBody struct {
-	Email string `json"email"`
+	Email string `json:"email"`
 }
 
 type ListEmailsResponse struct {
 	Emails []Email `json:"emails"`
+}
+
+type ErrorResponse struct {
+	Message string `json:"msg"`
 }
