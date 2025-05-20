@@ -10,8 +10,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func CreateDB() *sql.DB {
-	dsn := "file:mailing-list.db?cache=shared"
+func CreateDB(file string) *sql.DB {
+	dsn := fmt.Sprintf("file:%v?cache=shared", file)
 	db, err := sql.Open("sqlite3", dsn)
 
 	if err != nil {

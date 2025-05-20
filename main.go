@@ -13,17 +13,25 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
+	"github.com/joho/godotenv"
 )
 
 var db *sql.DB
 
+
 func main() {
+	godotenv.Load()
+
+	// configuration variables
+	PORT := setConfig("PORT")
+	SQLITE_DB := setConfig("SQLITE_DB")
+
 	// configure logging
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
 
 	slog.Info("Creating sql database")
-	db = database.CreateDB()
+	db = database.CreateDB(SQLITE_DB)
 	database.CreateSchema(db)
 
 	r := chi.NewRouter()
@@ -52,7 +60,16 @@ func main() {
 
 	})
 
-	slog.Info("Starting the server on port 8080")
-	http.ListenAndServe(":8080", r)
+	slog.Info("Starting the server", "port", PORT)
+	http.ListenAndServe(":" + PORT, r)
 
+}
+
+func setConfig(v string) string {
+	if val, ok := os.LookupEnv(v); ok {
+		slog.Info("Setting environment variable", v, val)
+		return val
+	}
+	slog.Warn("Environment variable could not be read", "variable", v)
+	return ""
 }
