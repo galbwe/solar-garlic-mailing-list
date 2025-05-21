@@ -6,14 +6,17 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"solar-garlic-mailing-list/database"
 	"solar-garlic-mailing-list/handlers"
+	"solar-garlic-mailing-list/jobs"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3"
 )
 
 var db *sql.DB
@@ -24,6 +27,8 @@ func main() {
 	// configuration variables
 	PORT := setConfig("PORT")
 	SQLITE_DB := setConfig("SQLITE_DB")
+	DB_BACKUP_SCHEDULE := setConfig("DB_BACKUP_SCHEDULE")
+	DB_BACKUP_S3_BUCKET := setConfig("DB_BACKUP_S3_BUCKET")
 
 	// configure logging
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -59,6 +64,22 @@ func main() {
 
 	})
 
+	// set up cron jobs
+	c := cron.New()
+
+	// backup the sqlite database once a day
+	if DB_BACKUP_SCHEDULE != "" {
+		c.AddFunc(DB_BACKUP_SCHEDULE, func() {
+			slog.Info("Backing up database ...")
+			timestamp := time.Now().UTC().Unix()
+			key := fmt.Sprintf("/mailing-list/backups/db/%v/%v", timestamp, SQLITE_DB)
+			jobs.UploadToS3(SQLITE_DB, DB_BACKUP_S3_BUCKET, key)
+		})
+	}
+	c.Start()
+	defer c.Stop()
+
+	// run the server
 	slog.Info("Starting the server", "port", PORT)
 	http.ListenAndServe(":"+PORT, r)
 
