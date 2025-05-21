@@ -66,7 +66,6 @@ func CreateEmail(db *sql.DB, email string) (*model.Email, error) {
 }
 
 func ListEmails(db *sql.DB, email string) ([]model.Email, error) {
-	var emails []model.Email
 
 	stmt, params := getListEmailsQuery(email)
 
@@ -78,6 +77,8 @@ func ListEmails(db *sql.DB, email string) ([]model.Email, error) {
 		return nil, err
 	}
 	defer rows.Close()
+
+	emails := []model.Email{}
 
 	for rows.Next() {
 		var email model.Email
