@@ -18,7 +18,6 @@ import (
 
 var db *sql.DB
 
-
 func main() {
 	godotenv.Load()
 
@@ -61,7 +60,7 @@ func main() {
 	})
 
 	slog.Info("Starting the server", "port", PORT)
-	http.ListenAndServe(":" + PORT, r)
+	http.ListenAndServe(":"+PORT, r)
 
 }
 
