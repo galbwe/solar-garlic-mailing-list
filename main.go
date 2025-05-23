@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"solar-garlic-mailing-list/database"
+	"solar-garlic-mailing-list/email"
 	"solar-garlic-mailing-list/handlers"
 	"solar-garlic-mailing-list/jobs"
 
@@ -25,10 +26,16 @@ func main() {
 	godotenv.Load()
 
 	// configuration variables
-	PORT := setConfig("PORT")
-	SQLITE_DB := setConfig("SQLITE_DB")
-	DB_BACKUP_SCHEDULE := setConfig("DB_BACKUP_SCHEDULE")
-	DB_BACKUP_S3_BUCKET := setConfig("DB_BACKUP_S3_BUCKET")
+	PORT := setConfig("PORT", false)
+	SQLITE_DB := setConfig("SQLITE_DB", false)
+	DB_BACKUP_SCHEDULE := setConfig("DB_BACKUP_SCHEDULE", false)
+	DB_BACKUP_S3_BUCKET := setConfig("DB_BACKUP_S3_BUCKET", false)
+	MAIL_CONFIG := email.MailConfig{
+		MailFrom: setConfig("MAIL_FROM", false),
+		User:     setConfig("AWS_SMTP_USER", false),
+		Password: setConfig("AWS_SMTP_PASSWORD", true),
+		Host:     setConfig("SMTP_HOST", false),
+	}
 
 	// configure logging
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -47,7 +54,7 @@ func main() {
 	// v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/emails", handlers.ListEmailsHandler(db, validate))
-		r.Post("/emails", handlers.CreateEmailHandler(db, validate))
+		r.Post("/emails", handlers.CreateEmailHandler(db, validate, MAIL_CONFIG))
 
 		r.Get("/emails/{id:^[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
 			id := chi.URLParam(r, "id")
@@ -85,9 +92,14 @@ func main() {
 
 }
 
-func setConfig(v string) string {
+func setConfig(v string, secret bool) string {
 	if val, ok := os.LookupEnv(v); ok {
-		slog.Info("Setting environment variable", v, val)
+		if secret {
+			slog.Info("Setting environment variable", v, val[:4]+"***********************")
+		} else {
+			slog.Info("Setting environment variable", v, val)
+		}
+
 		return val
 	}
 	slog.Warn("Environment variable could not be read", "variable", v)

@@ -8,13 +8,14 @@ import (
 	"net/http"
 
 	"solar-garlic-mailing-list/database"
+	"solar-garlic-mailing-list/email"
 	"solar-garlic-mailing-list/model"
 
 	"github.com/go-playground/validator/v10"
 )
 
 // really a factory that creates a handler function
-func CreateEmailHandler(db *sql.DB, validate *validator.Validate) func(http.ResponseWriter, *http.Request) {
+func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig email.MailConfig) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// get the email from the request body
 
@@ -35,7 +36,7 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate) func(http.Resp
 			return
 		}
 
-		email, dbErr := database.CreateEmail(db, emailAddress)
+		e, dbErr := database.CreateEmail(db, emailAddress)
 
 		// will need to consider case where the email already exists in the db
 
@@ -51,7 +52,7 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate) func(http.Resp
 			}
 
 			if len(existing) > 0 {
-				slog.Error("Tried to create email address that already exists", "email", email)
+				slog.Error("Tried to create email address that already exists", "email", e)
 				errorResponse(w, "Email address already exists", http.StatusConflict)
 				return
 			}
@@ -60,9 +61,18 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate) func(http.Resp
 			return
 		}
 
+		// send a verification email in the background
+		go email.SendVerificationEmail(
+			mailConfig.MailFrom,
+			emailAddress,
+			mailConfig.User,
+			mailConfig.Password,
+			mailConfig.Host,
+		)
+
 		w.Header().Set("Content-Type", "application/json")
 
-		encodeErr := json.NewEncoder(w).Encode(email)
+		encodeErr := json.NewEncoder(w).Encode(e)
 		if encodeErr != nil {
 			slog.Error("Error encoding CreateEmailHandler response body", "err", encodeErr)
 			errorResponse(w, "Error encoding response", http.StatusInternalServerError)
