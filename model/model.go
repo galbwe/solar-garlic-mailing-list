@@ -19,11 +19,12 @@ func (nt NullTime) MarshalJSON() ([]byte, error) {
 }
 
 type Email struct {
-	ID           int       `json:"id"`
-	Email        string    `json:"email"`
-	DateCreated  time.Time `json:"dateCreated"`
-	DateVerified NullTime  `json:"dateVerified"`
-	Subscribed   bool      `json:"subscribed"`
+	ID            int       `json:"id"`
+	Email         string    `json:"email"`
+	DateCreated   time.Time `json:"dateCreated"`
+	DateVerified  NullTime  `json:"dateVerified"`
+	Subscribed    bool      `json:"subscribed"`
+	UnsubscribeId string    `json:"-"`
 }
 
 type Token struct {

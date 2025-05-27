@@ -29,7 +29,8 @@ func CreateSchema(db *sql.DB) {
 			email TEXT NOT NULL UNIQUE,
 			date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
 			date_verified DATETIME DEFAULT NULL,
-			subscribed BOOLEAN DEFAULT true
+			subscribed BOOLEAN DEFAULT false,
+			unsubscribe_id TEXT NOT NULL UNIQUE
 		);
 	`
 	slog.Info("Creating emails table", "stmt", stmt)
@@ -58,7 +59,7 @@ func CreateSchema(db *sql.DB) {
 	}
 }
 
-func CreateEmail(db *sql.DB, email string, token string) (*model.Email, *model.Token, error) {
+func CreateEmail(db *sql.DB, email, token, unsubscribeID string) (*model.Email, *model.Token, error) {
 	var createdEmail = &model.Email{}
 	var createdToken = &model.Token{}
 
@@ -71,10 +72,10 @@ func CreateEmail(db *sql.DB, email string, token string) (*model.Email, *model.T
 
 	// Create the email
 	stmt := `
-		INSERT INTO emails (email) VALUES ($1)
-		RETURNING id, email, date_created, date_verified, subscribed
+		INSERT INTO emails (email, unsubscribe_id) VALUES ($1, $2)
+		RETURNING id, email, date_created, date_verified, subscribed, unsubscribe_id
 	`
-	params := []any{email}
+	params := []any{email, unsubscribeID}
 	slog.Info("Inserting email into database", "stmt", stmt, "params", params)
 
 	err = tx.QueryRow(stmt, params...).Scan(
@@ -83,6 +84,7 @@ func CreateEmail(db *sql.DB, email string, token string) (*model.Email, *model.T
 		&createdEmail.DateCreated,
 		&createdEmail.DateVerified,
 		&createdEmail.Subscribed,
+		&createdEmail.UnsubscribeId,
 	)
 
 	if err != nil {
@@ -179,11 +181,14 @@ func getListEmailsQuery(email string) (string, []any) {
 	return stmt, params
 }
 
-func VerifyToken(db *sql.DB, token, tokenType string, ttlSeconds int) error {
+func VerifyToken(db *sql.DB, token, tokenType string, ttlSeconds int) (string, string, error) {
 	// get emails from the database with a matching token that has not expired yet
 	var emailId int
+	var email string
+	var unsubscribeID string
+
 	stmt := `
-		SELECT e.id 
+		SELECT e.id, e.email, e.unsubscribe_id 
 		FROM emails e join tokens t on e.id = t.email_id
 		WHERE
 			t.token = $1
@@ -194,20 +199,20 @@ func VerifyToken(db *sql.DB, token, tokenType string, ttlSeconds int) error {
 	`
 	params := []any{token, tokenType, fmt.Sprintf(`+%v seconds`, ttlSeconds)}
 
-	err := db.QueryRow(stmt, params...).Scan(&emailId)
+	err := db.QueryRow(stmt, params...).Scan(&emailId, &email, &unsubscribeID)
 
 	if err != nil {
 		slog.Error("Error querying database for emails", "stmt", stmt, "params", params, "err", err)
-		return err
+		return "", "", err
 	}
 
 	// return an error if no email with a matching token is found
 
-	// update the email verified date
+	// update the email verified date and subscribe the user
 	if tokenType == "email" {
 		stmt = `
 			UPDATE emails
-			SET date_verified = CURRENT_TIMESTAMP	
+			SET date_verified = CURRENT_TIMESTAMP, subscribed = true	
 			WHERE id = $1;
 		`
 		params = []any{emailId}
@@ -216,11 +221,11 @@ func VerifyToken(db *sql.DB, token, tokenType string, ttlSeconds int) error {
 
 		if err != nil {
 			slog.Error("Error updating email in database", "stmt", stmt, "params", params, "err", err)
-			return err
+			return "", "", err
 		}
 	}
 
 	// TODO: add verfication for admin user auth tokens
 
-	return nil
+	return email, unsubscribeID, nil
 }

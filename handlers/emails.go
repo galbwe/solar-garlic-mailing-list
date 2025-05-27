@@ -43,7 +43,13 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig ema
 			errorResponse(w, "Error creating user with that email", http.StatusInternalServerError)
 		}
 
-		e, t, dbErr := database.CreateEmail(db, emailAddress, token)
+		unsubscribeID, err := email.CreateUnsubscribeId()
+		if err != nil {
+			slog.Error("Could not generate email unsubscribe id", "email", emailAddress)
+			errorResponse(w, "Error creating user with that email", http.StatusInternalServerError)
+		}
+
+		e, t, dbErr := database.CreateEmail(db, emailAddress, token, unsubscribeID)
 
 		if dbErr != nil {
 			slog.Error("Database error while creating email", "err", dbErr)
@@ -142,7 +148,7 @@ func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConf
 
 		slog.Info("Verifying mailing list registration token", "t", token)
 
-		err := database.VerifyToken(db, token, "email", ttlSeconds)
+		e, unsubscribeID, err := database.VerifyToken(db, token, "email", ttlSeconds)
 
 		if err != nil {
 			slog.Error("Could not verify mailing list token", "token", token, "err", err)
@@ -151,6 +157,10 @@ func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConf
 			// TODO: redirect the client to an error page instead
 			return
 		}
+
+		// send sign up success email
+		slog.Info("Sending mailing list sign-up success email", "email", e)
+		go email.SendSignUpSuccessEmail(config.MailFrom, e, config.User, config.Password, config.Host, unsubscribeID)
 
 		// TODO: redirect the client to a success page
 		http.Redirect(w, r, redirectURL, http.StatusFound)
