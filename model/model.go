@@ -26,6 +26,14 @@ type Email struct {
 	Subscribed   bool      `json:"subscribed"`
 }
 
+type Token struct {
+	ID          int       `json:"id"`
+	EmailID     int       `json:"emailID"`
+	Token       string    `json:"token"`
+	Type        string    `json:"type"`
+	DateCreated time.Time `json:"dateCreated"`
+}
+
 type CreateEmailBody struct {
 	Email string `json:"email"`
 }

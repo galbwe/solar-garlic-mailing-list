@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"solar-garlic-mailing-list/database"
@@ -36,6 +37,13 @@ func main() {
 		Password: setConfig("AWS_SMTP_PASSWORD", true),
 		Host:     setConfig("SMTP_HOST", false),
 	}
+	SKIP_MAILING_LIST_VERIFICATION := setConfig("SKIP_MAILING_LIST_VERFICATION", false)
+	EMAIL_VERIFCATION_TOKEN_TTL_SECONDS, err := strconv.ParseInt(setConfig("EMAIL_VERIFICATION_TOKEN_TTL_SECONDS", false), 10, 64)
+	if err != nil {
+		slog.Error("Error reading env var", "err", err, "var", "EMAIL_VERIFICATION_TOKEN_TTL_SECONDS")
+		panic("Could not read env var: EMAIL_VERIFICATION_TOKEN_TTL_SECONDS")
+	}
+	EMAIL_VERIFICATION_SUCCESS_REDIRECT := setConfig("EMAIL_VERIFICATION_SUCCESS_REDIRECT", false)
 
 	// configure logging
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -54,7 +62,9 @@ func main() {
 	// v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/emails", handlers.ListEmailsHandler(db, validate))
-		r.Post("/emails", handlers.CreateEmailHandler(db, validate, MAIL_CONFIG))
+		r.Post("/emails", handlers.CreateEmailHandler(db, validate, MAIL_CONFIG, SKIP_MAILING_LIST_VERIFICATION))
+
+		r.Get("/emails/verify", handlers.VerifyEmail(db, validate, MAIL_CONFIG, int(EMAIL_VERIFCATION_TOKEN_TTL_SECONDS), EMAIL_VERIFICATION_SUCCESS_REDIRECT))
 
 		r.Get("/emails/{id:^[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
 			id := chi.URLParam(r, "id")

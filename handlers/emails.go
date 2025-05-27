@@ -15,7 +15,7 @@ import (
 )
 
 // really a factory that creates a handler function
-func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig email.MailConfig) func(http.ResponseWriter, *http.Request) {
+func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig email.MailConfig, skip_verify string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// get the email from the request body
 
@@ -36,9 +36,14 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig ema
 			return
 		}
 
-		e, dbErr := database.CreateEmail(db, emailAddress)
+		// token for email verification
+		token, err := email.CreateVerificationCode()
+		if err != nil {
+			slog.Error("Could not generate email verification token", "email", emailAddress)
+			errorResponse(w, "Error creating user with that email", http.StatusInternalServerError)
+		}
 
-		// will need to consider case where the email already exists in the db
+		e, t, dbErr := database.CreateEmail(db, emailAddress, token)
 
 		if dbErr != nil {
 			slog.Error("Database error while creating email", "err", dbErr)
@@ -61,14 +66,17 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig ema
 			return
 		}
 
-		// send a verification email in the background
-		go email.SendVerificationEmail(
-			mailConfig.MailFrom,
-			emailAddress,
-			mailConfig.User,
-			mailConfig.Password,
-			mailConfig.Host,
-		)
+		if skip_verify != "true" {
+			// send a verification email in the background
+			go email.SendVerificationEmail(
+				mailConfig.MailFrom,
+				emailAddress,
+				mailConfig.User,
+				mailConfig.Password,
+				mailConfig.Host,
+				t.Token,
+			)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 
@@ -117,6 +125,35 @@ func ListEmailsHandler(db *sql.DB, validate *validator.Validate) func(http.Respo
 			errorResponse(w, "Error encoding response", http.StatusInternalServerError)
 			return
 		}
+	}
+}
+
+func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConfig, ttlSeconds int, redirectURL string) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		params := r.URL.Query()
+		token := params.Get("t")
+
+		// TODO: validate token format
+		if errs := validate.Var(token, `required,base64rawurl`); errs != nil {
+			slog.Error("Invalid email verification token", "token", token, "errs", errs)
+			errorResponse(w, "Invalid url parameter: t. Please use a valid verification token.", http.StatusBadRequest)
+			return
+		}
+
+		slog.Info("Verifying mailing list registration token", "t", token)
+
+		err := database.VerifyToken(db, token, "email", ttlSeconds)
+
+		if err != nil {
+			slog.Error("Could not verify mailing list token", "token", token, "err", err)
+			errorResponse(w, "Could not verify mailing list token", http.StatusInternalServerError)
+
+			// TODO: redirect the client to an error page instead
+			return
+		}
+
+		// TODO: redirect the client to a success page
+		http.Redirect(w, r, redirectURL, http.StatusFound)
 	}
 }
 

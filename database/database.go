@@ -22,6 +22,7 @@ func CreateDB(file string) *sql.DB {
 }
 
 func CreateSchema(db *sql.DB) {
+	// create the emails table
 	stmt := `
 		CREATE TABLE IF NOT EXISTS emails (
 			id INTEGER NOT NULL PRIMARY KEY,
@@ -33,23 +34,50 @@ func CreateSchema(db *sql.DB) {
 	`
 	slog.Info("Creating emails table", "stmt", stmt)
 	_, err := db.Exec(stmt)
-
 	if err != nil {
 		slog.Error("Error creating emails table", "err", err)
 		panic(fmt.Sprintf("Could not create emails table: %v\n", err))
 	}
+
+	// create the tokens table
+	stmt = `
+		CREATE TABLE IF NOT EXISTS tokens (
+			id INTEGER NOT NULL PRIMARY KEY,
+			email_id INTEGER,	
+			token TEXT NOT NULL UNIQUE,
+			type TEXT NOT NULL CHECK (type in ('email', 'auth')),
+			date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(email_id) REFERENCES emails(id)
+		);
+	`
+	slog.Info("Creating the tokens table", "stmt", stmt)
+	_, err = db.Exec(stmt)
+	if err != nil {
+		slog.Error("Error creating tokens table", "err", err)
+		panic(fmt.Sprintf("Could not create tokens table: %v\n", err))
+	}
 }
 
-func CreateEmail(db *sql.DB, email string) (*model.Email, error) {
+func CreateEmail(db *sql.DB, email string, token string) (*model.Email, *model.Token, error) {
 	var createdEmail = &model.Email{}
+	var createdToken = &model.Token{}
+
+	tx, err := db.Begin()
+
+	if err != nil {
+		slog.Error("Error creating database transaction in CreateEmail", "err", err)
+		return nil, nil, err
+	}
+
+	// Create the email
 	stmt := `
 		INSERT INTO emails (email) VALUES ($1)
 		RETURNING id, email, date_created, date_verified, subscribed
 	`
 	params := []any{email}
-
 	slog.Info("Inserting email into database", "stmt", stmt, "params", params)
-	err := db.QueryRow(stmt, params...).Scan(
+
+	err = tx.QueryRow(stmt, params...).Scan(
 		&createdEmail.ID,
 		&createdEmail.Email,
 		&createdEmail.DateCreated,
@@ -58,11 +86,31 @@ func CreateEmail(db *sql.DB, email string) (*model.Email, error) {
 	)
 
 	if err != nil {
-		slog.Error("Error inserting email into database", "stmt", stmt, "params", params)
-		return nil, err
+		slog.Error("Error inserting email into database", "stmt", stmt, "params", params, "err", err)
+		tx.Rollback()
+		return nil, nil, err
 	}
 
-	return createdEmail, nil
+	// Create a verification token for the email
+	stmt = `
+		INSERT INTO tokens (email_id, token, type) 
+		VALUES ($1, $2, 'email')
+		RETURNING id, email_id, token, type, date_created
+	`
+	params = []any{createdEmail.ID, token}
+	slog.Info("Inserting token into database", "stmt", stmt, "params", params)
+	err = tx.QueryRow(stmt, params...).Scan(
+		&createdToken.ID,
+		&createdToken.EmailID,
+		&createdToken.Token,
+		&createdToken.Type,
+		&createdToken.DateCreated,
+	)
+	if err != nil {
+		slog.Error("Error inserting token into database", "stmt", stmt, "params", params, "err", err)
+	}
+	tx.Commit()
+	return createdEmail, createdToken, nil
 }
 
 func ListEmails(db *sql.DB, email string) ([]model.Email, error) {
@@ -119,7 +167,7 @@ func getListEmailsQuery(email string) (string, []any) {
 
 	stmt := `
 		SELECT	
-			id,
+			id,			
 			email,
 			date_created,
 			date_verified,
@@ -129,4 +177,50 @@ func getListEmailsQuery(email string) (string, []any) {
 	`
 	params := []any{email}
 	return stmt, params
+}
+
+func VerifyToken(db *sql.DB, token, tokenType string, ttlSeconds int) error {
+	// get emails from the database with a matching token that has not expired yet
+	var emailId int
+	stmt := `
+		SELECT e.id 
+		FROM emails e join tokens t on e.id = t.email_id
+		WHERE
+			t.token = $1
+			AND t.type = $2
+			AND CURRENT_TIMESTAMP < datetime(t.date_created, $3)
+			ORDER BY t.date_created DESC
+			LIMIT 1;
+	`
+	params := []any{token, tokenType, fmt.Sprintf(`+%v seconds`, ttlSeconds)}
+
+	err := db.QueryRow(stmt, params...).Scan(&emailId)
+
+	if err != nil {
+		slog.Error("Error querying database for emails", "stmt", stmt, "params", params, "err", err)
+		return err
+	}
+
+	// return an error if no email with a matching token is found
+
+	// update the email verified date
+	if tokenType == "email" {
+		stmt = `
+			UPDATE emails
+			SET date_verified = CURRENT_TIMESTAMP	
+			WHERE id = $1;
+		`
+		params = []any{emailId}
+
+		_, err = db.Exec(stmt, params...)
+
+		if err != nil {
+			slog.Error("Error updating email in database", "stmt", stmt, "params", params, "err", err)
+			return err
+		}
+	}
+
+	// TODO: add verfication for admin user auth tokens
+
+	return nil
 }
