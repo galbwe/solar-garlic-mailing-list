@@ -45,6 +45,8 @@ func main() {
 		panic("Could not read env var: EMAIL_VERIFICATION_TOKEN_TTL_SECONDS")
 	}
 	EMAIL_VERIFICATION_SUCCESS_REDIRECT := setConfig("EMAIL_VERIFICATION_SUCCESS_REDIRECT", false)
+	EMAIL_VERIFICATION_ENDPOINT := setConfig("EMAIL_VERIFICATION_ENDPOINT", false)
+	EMAIL_UNSUBSCRIBE_ENDPOINT := setConfig("EMAIL_UNSUBSCRIBE_ENDPOINT", false)
 
 	// configure logging
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -74,9 +76,9 @@ func main() {
 	// v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/emails", handlers.ListEmailsHandler(db, validate))
-		r.Post("/emails", handlers.CreateEmailHandler(db, validate, MAIL_CONFIG, SKIP_MAILING_LIST_VERIFICATION))
+		r.Post("/emails", handlers.CreateEmailHandler(db, validate, MAIL_CONFIG, SKIP_MAILING_LIST_VERIFICATION, EMAIL_VERIFICATION_ENDPOINT))
 
-		r.Get("/emails/verify", handlers.VerifyEmail(db, validate, MAIL_CONFIG, int(EMAIL_VERIFCATION_TOKEN_TTL_SECONDS), EMAIL_VERIFICATION_SUCCESS_REDIRECT))
+		r.Get("/emails/verify", handlers.VerifyEmail(db, validate, MAIL_CONFIG, int(EMAIL_VERIFCATION_TOKEN_TTL_SECONDS), EMAIL_VERIFICATION_SUCCESS_REDIRECT, EMAIL_UNSUBSCRIBE_ENDPOINT))
 
 		r.Get("/emails/{id:^[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
 			id := chi.URLParam(r, "id")

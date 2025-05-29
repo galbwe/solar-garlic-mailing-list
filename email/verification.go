@@ -8,13 +8,12 @@ import (
 	"gopkg.in/mail.v2"
 )
 
-func SendVerificationEmail(from, to, user, password, host, token string) {
+func SendVerificationEmail(from, to, user, password, host, token, verifyEndpoint string) {
 	m := mail.NewMessage()
 	m.SetHeader("From", from)
 	m.SetHeader("To", to)
 	m.SetHeader("Subject", "Solar Garlic Band - Email Verification")
-	// TODO: move verification host to environment variables
-	verificationLink := fmt.Sprintf("http://localhost:8080/api/v1/emails/verify?t=%v", token)
+	verificationLink := fmt.Sprintf("%v?t=%v", verifyEndpoint, token)
 	body := `
 	<p>Let's Get Funky!</p>
 	<p>But first, click <a href=%q>here</a> to finish signing up for Solar Garlic's mailing list. You'll get the latest news on our upcoming shows and releases %v</p>
@@ -36,14 +35,14 @@ func SendVerificationEmail(from, to, user, password, host, token string) {
 	slog.Info("Sent verification email", "to", to)
 }
 
-func SendSignUpSuccessEmail(from, to, user, password, host, unsubscribeID string) {
+func SendSignUpSuccessEmail(from, to, user, password, host, unsubscribeID, unsubscribeEndpoint string) {
 	m := mail.NewMessage()
 	m.SetHeader("From", from)
 	m.SetHeader("To", to)
 	m.SetHeader("Subject", "Solar Garlic Band - You're Subscribed!")
 
 	// TODO: move host for unsubscribe link to environment variables
-	unsubscribeLink := fmt.Sprintf("<http://localhost:8080/api/v1/emails/unsubscribe?id=%v>", unsubscribeID)
+	unsubscribeLink := fmt.Sprintf("<%v?id=%v>", unsubscribeEndpoint, unsubscribeID)
 	m.SetHeader("List-Unsubscribe", unsubscribeLink)
 
 	body := `

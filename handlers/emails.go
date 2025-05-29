@@ -15,7 +15,7 @@ import (
 )
 
 // really a factory that creates a handler function
-func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig email.MailConfig, skip_verify string) func(http.ResponseWriter, *http.Request) {
+func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig email.MailConfig, skip_verify, verifyEndpoint string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// get the email from the request body
 
@@ -81,6 +81,7 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig ema
 				mailConfig.Password,
 				mailConfig.Host,
 				t.Token,
+				verifyEndpoint,
 			)
 		}
 
@@ -134,7 +135,7 @@ func ListEmailsHandler(db *sql.DB, validate *validator.Validate) func(http.Respo
 	}
 }
 
-func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConfig, ttlSeconds int, redirectURL string) func(http.ResponseWriter, *http.Request) {
+func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConfig, ttlSeconds int, redirectURL, unsubscribeEndpoint string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := r.URL.Query()
 		token := params.Get("t")
@@ -160,7 +161,7 @@ func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConf
 
 		// send sign up success email
 		slog.Info("Sending mailing list sign-up success email", "email", e)
-		go email.SendSignUpSuccessEmail(config.MailFrom, e, config.User, config.Password, config.Host, unsubscribeID)
+		go email.SendSignUpSuccessEmail(config.MailFrom, e, config.User, config.Password, config.Host, unsubscribeID, unsubscribeEndpoint)
 
 		// TODO: redirect the client to a success page
 		http.Redirect(w, r, redirectURL, http.StatusFound)
