@@ -168,6 +168,38 @@ func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConf
 	}
 }
 
+func UnsubscribeEmail(db *sql.DB, validate *validator.Validate) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		params := r.URL.Query()
+		unsubscribeId := params.Get("id")
+
+		// TODO: validate token format
+
+		slog.Info("Unsubscribing mailing list user", "unsubscribeId", unsubscribeId)
+
+		err := database.UnsubscribeEmail(db, unsubscribeId)
+		if err != nil {
+			slog.Error("Could not unsubscribe mailing list user", "unsubscribeId", unsubscribeId, "err", err)
+			errorResponse(w, "Could not unsubscribe mailing list user", http.StatusInternalServerError)
+
+			return
+		}
+
+		slog.Info("Successfully unsubscribed mailing list user", "unsubscribeId", unsubscribeId)
+
+		w.Header().Set("Content-Type", "application/json")
+		encodeErr := json.NewEncoder(w).Encode(model.UnsubscribeResponse{
+			ID: unsubscribeId,
+			Message: "Successfully unsubscribed user from mailing list",
+		})
+		if encodeErr != nil {
+			slog.Error("Error encoding ListEmailsHandler response body", "err", encodeErr)
+			errorResponse(w, "Error encoding response", http.StatusInternalServerError)
+			return
+		}		
+	}
+}
+
 func decodeEmailAddressParam(r *http.Request) (string, error) {
 	query := r.URL.Query()
 

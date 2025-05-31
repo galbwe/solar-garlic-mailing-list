@@ -229,3 +229,20 @@ func VerifyToken(db *sql.DB, token, tokenType string, ttlSeconds int) (string, s
 
 	return email, unsubscribeID, nil
 }
+
+func UnsubscribeEmail(db *sql.DB, unsubscribeId string) error {
+	stmt := `
+		UPDATE emails
+		SET subscribed = false
+		WHERE unsubscribe_id = $1;
+	`
+	params := []any{unsubscribeId}
+
+	_, err := db.Exec(stmt, params...); if err != nil {
+		slog.Error("Error unsubscribing user from mailing list in the database", "stmt", stmt, "params", params, "err", err)
+		return err
+	}
+
+	slog.Info("Successfully unsubscribed user from mailing list in the database", "params", params)
+	return nil
+}

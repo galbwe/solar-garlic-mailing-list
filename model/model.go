@@ -43,6 +43,11 @@ type ListEmailsResponse struct {
 	Emails []Email `json:"emails"`
 }
 
+type UnsubscribeResponse struct {
+	ID      string `json:"id"`
+	Message string `json:"message"`
+}
+
 type ErrorResponse struct {
 	Message string `json:"msg"`
 }
