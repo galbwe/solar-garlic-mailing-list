@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/go-playground/validator/v10"
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
@@ -62,14 +61,14 @@ func main() {
 	r.Use(middleware.Logger)
 
 	// CORS middleware
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://*", "http://*"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300, // Maximum value not ignored by any of major browsers
-	}))
+	// r.Use(cors.Handler(cors.Options{
+	// 	AllowedOrigins:   []string{"https://*", "http://*"},
+	// 	AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+	// 	AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+	// 	ExposedHeaders:   []string{"Link"},
+	// 	AllowCredentials: false,
+	// 	MaxAge:           300, // Maximum value not ignored by any of major browsers
+	// }))
 
 	var validate = validator.New(validator.WithRequiredStructEnabled())
 
