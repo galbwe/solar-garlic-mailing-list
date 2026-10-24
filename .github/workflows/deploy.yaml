@@ -1,0 +1,59 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  Deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.0.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1
+      - name: Runner ECR Login
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          mask-password: 'true'
+      - name: Build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: solargarlicband/mailing-list
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      - name: Log out of Amazon ECR
+        if: always()
+        run: docker logout ${{ steps.login-ecr.outputs.registry }}
+      - name: Create PEM
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > key.pem
+          chmod 600 key.pem  
+      - name: EC2 ECR Login
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ec2-user@${{ secrets.SSH_HOST }} \
+          "aws ecr get-login-password --region us-west-1 | docker login --username AWS --password-stdin ${{steps.login-ecr.outputs.registry}}"
+      - name: Docker Pull
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ec2-user@${{ secrets.SSH_HOST }} \
+          "docker image pull ${{ steps.login-ecr.outputs.registry }}/solargarlicband/mailing-list:${{ github.sha }}"
+      - name: Get Image Ids
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ec2-user@${{ secrets.SSH_HOST }} \
+          "docker image ls --filter "reference=*/solargarlicband/website" -q | head -n1 > website-image-id.txt && docker image ls --filter "reference=*/solargarlicband/mailing-list" -q | head -n1 > mailing-list-image-id.txt"
+      - name: Deploy
+        run: |
+          ssh -o StrictHostKeyChecking=no -i key.pem ec2-user@${{ secrets.SSH_HOST }} \
+          "./scripts/deploy.sh"
+      - name: Remove PEM
+        if: always()
+        run: |
+          rm key.pem
