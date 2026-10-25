@@ -97,44 +97,6 @@ func CreateEmailHandler(db *sql.DB, validate *validator.Validate, mailConfig ema
 	}
 }
 
-func ListEmailsHandler(db *sql.DB, validate *validator.Validate) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-		email, decodeErr := decodeEmailAddressParam(r)
-		if decodeErr != nil {
-			slog.Error("Error while decoding query string param", "param", "a", "err", decodeErr)
-			errorResponse(w, "Invalid query string param: a. Please use a url-safe base64 encoded email.", http.StatusBadRequest)
-			return
-		}
-		if email != "" {
-			// TODO: validate the email
-			slog.Info("Querying for emails by address.", "email", email)
-			if errs := validate.Var(email, "required,email"); errs != nil {
-				slog.Error("Validation error for email", "email", email, "errs", errs)
-				errorResponse(w, "Invalid query string param: a. Please use a url-safe base64 encoded email.", http.StatusBadRequest)
-				return
-			}
-		}
-		emails, dbErr := database.ListEmails(db, email)
-		if dbErr != nil {
-			slog.Error("Database error while listing emails", "err", dbErr)
-			errorResponse(w, "Error listings emails", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		encodeErr := json.NewEncoder(w).Encode(model.ListEmailsResponse{
-			Emails: emails,
-		})
-		if encodeErr != nil {
-			slog.Error("Error encoding ListEmailsHandler response body", "err", encodeErr)
-			errorResponse(w, "Error encoding response", http.StatusInternalServerError)
-			return
-		}
-	}
-}
-
 func VerifyEmail(db *sql.DB, validate *validator.Validate, config email.MailConfig, ttlSeconds int, redirectURL, unsubscribeEndpoint string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := r.URL.Query()
