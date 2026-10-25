@@ -78,24 +78,10 @@ func main() {
 
 	// v1 routes
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/emails", handlers.ListEmailsHandler(db, validate))
 		r.Post("/emails", handlers.CreateEmailHandler(db, validate, MAIL_CONFIG, SKIP_MAILING_LIST_VERIFICATION, EMAIL_VERIFICATION_ENDPOINT))
 
 		r.Get("/emails/verify", handlers.VerifyEmail(db, validate, MAIL_CONFIG, int(EMAIL_VERIFCATION_TOKEN_TTL_SECONDS), EMAIL_VERIFICATION_SUCCESS_REDIRECT, EMAIL_UNSUBSCRIBE_ENDPOINT))
 		r.Get("/emails/unsubscribe", handlers.UnsubscribeEmail(db, validate))
-
-		r.Get("/emails/{id:^[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
-			id := chi.URLParam(r, "id")
-			w.Write([]byte(fmt.Sprintf("get email with id %q", id)))
-		})
-		r.Put("/emails/{id:^[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
-			id := chi.URLParam(r, "id")
-			w.Write([]byte(fmt.Sprintf("update email with id %q", id)))
-		})
-		r.Delete("/emails/{id:^[0-9]+}", func(w http.ResponseWriter, r *http.Request) {
-			id := chi.URLParam(r, "id")
-			w.Write([]byte(fmt.Sprintf("delete email with id %q", id)))
-		})
 
 	})
 
